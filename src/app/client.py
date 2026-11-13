@@ -29,81 +29,31 @@ class SampleApisCoffeeClient:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
 
-    def CheckStatusCode(status: int) -> bool:
-        if status < 400:
-            return True
-        else:
-            return False
-
     def list_drinks(self) -> list[JsonObject]:
-        request = requests.get(self._base_url, timeout = self._timeout)
-        if self.CheckStatusCode(request.status_code):
-            return request.json
-        else:
-            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
+        return self._request(method = "lst").json
 
     def get_drink(self, drink_id: int) -> JsonObject:
-        request = requests.get(self._base_url + f"/{drink_id}", timeout = self._timeout)
-        if self.CheckStatusCode(request):
-            return request
-        else:
-            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
+        return self._request(method = "get", path = drink_id).json
 
     def create_drink(self, payload: JsonObject) -> JsonObject:
-        existenceRequest = requests.get(self._base_url + f"/{payload["id"]}", timeout = self._timeout)
-        if not self.CheckStatusCode(existenceRequest):
-            request = requests.post(url = self._base_url, timeout = self._timeout, data = payload)
-
-            if self.CheckStatusCode(request.status_code):
-                return request.json
-            else:
-                raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
-        else:
-            return existenceRequest.json
+        return self._request(method = "crt", payload = payload).json
 
     def replace_drink(
         self,
         drink_id: int,
         payload: JsonObject,
     ) -> JsonObject:
-        existenceRequest = requests.get(self._base_url + f"/{drink_id}", timeout = self._timeout)
-        if self.CheckStatusCode(existenceRequest):
-            request = requests.put(url = self._base_url + f"/{drink_id}", timeout = self._timeout, data = payload)
-
-            if self.CheckStatusCode(request.status_code):
-                return request.json
-            else:
-                raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
-        else:
-            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
+        return self._request(method = "rpl", path = drink_id, payload = payload)
 
     def update_drink(
         self,
         drink_id: int,
         changes: JsonObject,
     ) -> JsonObject:
-        existenceRequest = requests.get(self._base_url + f"/{drink_id}", timeout = self._timeout)
-        if self.CheckStatusCode(existenceRequest):
-            request = requests.patch(url = self._base_url + f"/{drink_id}", timeout = self._timeout, data = changes)
-
-            if self.CheckStatusCode(request.status_code):
-                return request.json
-            else:
-                raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
-        else:
-            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
+        return self._request(method = "upd", path = drink_id, payload = changes)
 
     def delete_drink(self, drink_id: int) -> None:
-        existenceRequest = requests.get(self._base_url + f"/{drink_id}", timeout = self._timeout)
-        if self.CheckStatusCode(existenceRequest):
-            request = requests.delete(url = self._base_url + f"/{drink_id}", timeout = self._timeout)
-
-            if self.CheckStatusCode(request.status_code):
-                return request.json
-            else:
-                raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
-        else:
-            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
+        self._request(method = "del", path = drink_id)
 
     def _request(
         self,
@@ -111,4 +61,31 @@ class SampleApisCoffeeClient:
         path: str = "",
         payload: JsonObject | None = None,
     ) -> requests.Response:
-        return requests.request(method = method, url = self._base_url + '/' + path, data = payload)
+        request
+        if method == "lst":
+            request = requests.get(self._base_url, timeout = self._timeout)
+        elif method == "get":
+            request = requests.get(self._base_url + f"/{path}", timeout = self._timeout)
+        elif method == "crt":
+            try:
+                request = self._request(method = "get", path = payload["id"])
+            except exceptions.CoffeeNotFoundError:
+                request = requests.post(url = self._base_url, timeout = self._timeout, data = payload)
+            except exceptions.CoffeeApiError:
+                raise exceptions.CoffeeApiError
+            else:
+                return request
+        elif method == "rpl":
+            self._request(method = "get", path = path)
+            request = requests.put(url = self._base_url + f"/{path}", timeout = self._timeout, data = payload)
+        elif method == "upd":
+            self._request(method = "get", path = path)
+            request = requests.patch(url = self._base_url + f"/{path}", timeout = self._timeout, data = payload)
+        elif method == "del":
+            self._request(method = "get", path = path)
+            request = requests.delete(url = self._base_url + f"/{path}", timeout = self._timeout)
+
+        if request.status_code < 400:
+            return request
+        else:
+            raise exceptions.CoffeeNotFoundError if request.status_code < 500 else exceptions.CoffeeApiError
